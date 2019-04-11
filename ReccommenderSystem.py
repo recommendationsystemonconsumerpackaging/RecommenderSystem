@@ -1,10 +1,11 @@
 #  -*- coding: utf-8 -*-
 """
 Created on Wed Feb 27 01:17:36 2019
-Modified on 12:30 PM 3/27/2019
+Modified on 12:30 PM 4/11/2019
 @authors: adity
           Amit Parmar (amitparm@buffalo.edu)
 """
+
 import pandas as pd
 from apyori import apriori
 import pickle
@@ -16,12 +17,13 @@ import dash_table
 import dash_html_components as html
 import dash_core_components as dcc
 from dash.dependencies import Input, Output, State
+import plotly.graph_objs as go
 
 
-def masking_groupby(keys, vals):
+def masking_groupby(keys, values):
     keys = np.asarray(keys)
-    vals = np.asarray(vals)
-    return {key: vals[keys == key].tolist()
+    values = np.asarray(values)
+    return {key: values[keys == key].tolist()
             for key in np.unique(keys)}
 
 
@@ -58,12 +60,60 @@ def get_last_run_paramters():
     return support, confidence
 
 
-def run_dash_data_table():
+def read_csv_last_run():
     df = pd.read_csv('apriori-output-n.csv')
+    return df
 
+
+def create_scatter_figure(df):
+    figure = {
+        'data': [
+            go.Scatter(
+                x=df['Lift'],
+                y=df['Support'],
+                mode='markers',
+                marker={
+                    "color": df['Confidence'],
+                    "colorscale": [
+                        [0, "#e8f5ab"], [0.09090909090909091, "#dcdb89"], [0.18181818181818182, "#d1c16b"],
+                        [0.2727272727272727, "#c7a853"], [0.36363636363636365, "#ba8f42"],
+                        [0.45454545454545453, "#aa793c"], [0.5454545454545454, "#97673a"],
+                        [0.6363636363636364, "#815738"], [0.7272727272727273, "#684835"],
+                        [0.8181818181818182, "#503b2e"], [0.9090909090909091, "#392d25"], [1, "#221e1b"]],
+                    "colorsrc": "amitparmar01:0:618191",
+                    "size": df['Support'],
+                    "sizemode": "area",
+                    "sizeref": 0.01956641975308642,
+                    "sizesrc": "amitparmar01:0:0012e6",
+                    "reversescale": False
+                },
+                text=df['Relations']
+            )
+        ],
+        'layout': go.Layout(
+            title='Product Association Scatter Plot',
+            xaxis={
+                "autorange": True,
+                "title": {"text": "Lift"},
+                "type": "linear"
+            },
+            yaxis={
+                "autorange": True,
+                "title": {"text": "Support %"},
+                "type": "linear"
+            }
+        )
+    }
+
+    return figure
+
+
+def run_dash_data_table():
+
+    df = read_csv_last_run()
     support, confidence = get_last_run_paramters()
 
-    external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+    external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css', 'https://codepen.io/chriddyp/pen/brPBPO.css']
     app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
     app.layout = html.Div([
@@ -75,39 +125,63 @@ def run_dash_data_table():
             html.Button(id='submit-button', n_clicks=0, children='Submit'),
             html.Div(id='output-state')
         ]),
-        html.Div(id='datatable-mod'),
+        html.Hr(),
+        html.Div(id='intermediate-value', style={'display': 'none'}),
+        html.Div(
+            dcc.Graph(
+                id='scatter-chart'
+            )
+        ),
         html.Hr(),
         html.Div([dash_table.DataTable(
             id='datatable-int',
-            columns=[{'name': c, 'id': c} for c in df.columns],
+            columns=[{'name': c, 'id': c} for c in df.columns if c != 'Relations'],
             data=df.to_dict("rows"),
             sorting=True,
-            filtering=True,
+            filtering=False,
             pagination_mode=False,
         )])
     ])
 
     @app.callback(Output('datatable-int', 'data'),
+                  [Input('intermediate-value', 'children')])
+    def update_output(jsonified_cleaned_data):
+        dff = pd.read_json(jsonified_cleaned_data, orient='split')
+        return dff.to_dict("rows")
+
+    @app.callback(Output('intermediate-value', 'children'),
                   [Input('submit-button', 'n_clicks')],
                   [State('input-1-support', 'value'),
                    State('input-2-confidence', 'value')])
-    def update_output(n_clicks, support, confidence):
+    def get_new_data(n_clicks, support_val, confidence_val):
 
-        if support != 'Support' and confidence != 'Confidence':
-            dff = run_apriori(support=float(support), confidence=float(confidence))
-            return dff.to_dict("rows")
+        if n_clicks != 0:
+            if support_val != 'Support' and confidence_val != 'Confidence':
+                dff = run_apriori(support=float(support_val), confidence=float(confidence_val))
+            else:
+                dff = read_csv_last_run()
+        else:
+            dff = read_csv_last_run()
+
+        return dff.to_json(date_format='iso', orient='split')
+
+    @app.callback(Output('scatter-chart', 'figure'),
+                  [Input('intermediate-value', 'children')])
+    def update_scatter_plot(jsonified_cleaned_data):
+        dff = pd.read_json(jsonified_cleaned_data, orient='split')
+        return create_scatter_figure(dff)
 
     @app.callback(Output('data-params', 'children'),
                   [Input('submit-button', 'n_clicks')],
                   [State('input-1-support', 'value'),
                    State('input-2-confidence', 'value')])
-    def update_parameters(n_clicks, support, confidence):
+    def update_parameters(n_clicks, support_val, confidence_val):
 
         if n_clicks == 0:
-            support, confidence = get_last_run_paramters()
+            support_val, confidence_val = get_last_run_paramters()
 
-        if support and confidence:
-            return "Support: {0} |  Confidence: {1}".format(support, confidence)
+        if support_val and confidence_val:
+            return "Support: {0} |  Confidence: {1}".format(support_val, confidence_val)
         else:
             return "Support: NA |  Confidence: NA"
 
@@ -148,8 +222,8 @@ def run_apriori(support=None, confidence=None):
         support, confidence = get_last_run_paramters()
 
     # Training data on Apriori Model
-    # rules = apriori(transactions.values(), min_support=support, min_confidence=confidence)
-    rules = apriori(extract_colors(transactions), min_support=support, min_confidence=confidence)
+    rules = apriori(transactions.values(), min_support=support, min_confidence=confidence)
+    # rules = apriori(extract_colors(transactions), min_support=support, min_confidence=confidence)
 
     # Visualising the results
     results = list(rules)
@@ -160,9 +234,12 @@ def run_apriori(support=None, confidence=None):
         items = [x for x in pair]
         if len(items) > 1:
             data_results.append(tuple([items[0], items[1], round(item[1]*100,4),
-                                       round(item[2][0][2] * 100, 4), item[2][0][3]]))
+                                       round(item[2][0][2] * 100, 4), item[2][0][3],
+                                       '{0} ---> {1} (C={2}%)'.format(items[0], items[1],
+                                                                     round(item[2][0][2] * 100, 4))]))
 
-    dff = pd.DataFrame.from_records(data_results, columns=['Antecedant', 'Descendant', 'Support', 'Confidence', 'Lift'])
+    dff = pd.DataFrame.from_records(data_results, columns=['Antecedant', 'Descendant', 'Support', 'Confidence', 'Lift',
+                                                           'Relations'])
     dff.to_csv('apriori-output-n.csv', encoding='utf-8', index=False)
 
     with open('last_run.txt', 'w') as f:
@@ -172,7 +249,7 @@ def run_apriori(support=None, confidence=None):
 
 
 def main():
-    # importing the dataset
+
     print('starting')
 
     run_apriori()
