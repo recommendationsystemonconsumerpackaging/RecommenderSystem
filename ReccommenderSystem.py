@@ -70,10 +70,10 @@ def create_scatter_figure(df):
         'data': [
             go.Scatter(
                 x=df['Lift'],
-                y=df['Support'],
+                y=df['Support (%)'],
                 mode='markers',
                 marker={
-                    "color": df['Confidence'],
+                    "color": df['Confidence (%)'],
                     "colorscale": [
                         [0, "#e8f5ab"], [0.09090909090909091, "#dcdb89"], [0.18181818181818182, "#d1c16b"],
                         [0.2727272727272727, "#c7a853"], [0.36363636363636365, "#ba8f42"],
@@ -81,7 +81,7 @@ def create_scatter_figure(df):
                         [0.6363636363636364, "#815738"], [0.7272727272727273, "#684835"],
                         [0.8181818181818182, "#503b2e"], [0.9090909090909091, "#392d25"], [1, "#221e1b"]],
                     "colorsrc": "amitparmar01:0:618191",
-                    "size": df['Support'],
+                    "size": df['Support (%)'],
                     "sizemode": "area",
                     "sizeref": 0.01956641975308642,
                     "sizesrc": "amitparmar01:0:0012e6",
@@ -113,8 +113,11 @@ def run_dash_data_table():
     df = read_csv_last_run()
     support, confidence = get_last_run_paramters()
 
-    external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css', 'https://codepen.io/chriddyp/pen/brPBPO.css']
-    app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+    # external_stylesheets = ['/bWLwgP.css', '/brPBPO.css']
+    # app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+    app = dash.Dash(__name__)
+    app.css.config.serve_locally = True
+    app.scripts.config.serve_locally = True
 
     app.layout = html.Div([
         html.H1(id='data-params', children="Support: {0} |  Confidence: {1}".format(support, confidence)),
@@ -238,7 +241,7 @@ def run_apriori(support=None, confidence=None):
                                        '{0} ---> {1} (C={2}%)'.format(items[0], items[1],
                                                                      round(item[2][0][2] * 100, 4))]))
 
-    dff = pd.DataFrame.from_records(data_results, columns=['Antecedant', 'Descendant', 'Support', 'Confidence', 'Lift',
+    dff = pd.DataFrame.from_records(data_results, columns=['Antecedant', 'Descendant', 'Support (%)', 'Confidence (%)', 'Lift',
                                                            'Relations'])
     dff.to_csv('apriori-output-n.csv', encoding='utf-8', index=False)
 
